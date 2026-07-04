@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import android_build_retry as mod
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def test_detect_truncation_matches_qt_error(tmp_path: Path) -> None:
@@ -51,14 +54,14 @@ def test_clean_settings_json_noop_when_missing(tmp_path: Path) -> None:
 def test_main_missing_log_returns_error(tmp_path: Path, capsys) -> None:
     rc = mod.main(["--build-dir", str(tmp_path), "--build-type", "Debug"])
     assert rc == 1
-    assert "is missing" in capsys.readouterr().err
+    assert "is missing" in capsys.readouterr().out
 
 
 def test_main_non_retriable_returns_error(tmp_path: Path, capsys) -> None:
     (tmp_path / "qgc-build.log").write_text("ninja: error: unrelated\n")
     rc = mod.main(["--build-dir", str(tmp_path), "--build-type", "Debug"])
     assert rc == 1
-    assert "non-retriable" in capsys.readouterr().err
+    assert "non-retriable" in capsys.readouterr().out
 
 
 def test_main_truncation_invokes_retry(tmp_path: Path, monkeypatch) -> None:

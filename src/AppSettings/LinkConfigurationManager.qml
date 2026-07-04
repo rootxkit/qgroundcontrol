@@ -75,10 +75,10 @@ SettingsGroupLayout {
                 }
             }
             QGCButton {
-                text:       object.link ? qsTr("Disconnect") : qsTr("Connect")
+                text:       object.linkActive ? qsTr("Disconnect") : qsTr("Connect")
                 onClicked: {
-                    if (object.link) {
-                        object.link.disconnect()
+                    if (object.linkActive) {
+                        _linkManager.disconnectLinkConfiguration(object)
                     } else {
                         _linkManager.createConnectedLink(object)
                     }

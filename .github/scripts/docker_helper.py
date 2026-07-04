@@ -2,7 +2,7 @@
 """Docker build helpers for CI.
 
 Subcommands:
-    validate              Validate dockerfile and build-type inputs
+    validate              Validate target and build-type inputs
     run                   Run docker build with retry logic
     resolve-push-target   Resolve the GHCR/Docker Hub push target for the current ref
 """
@@ -18,42 +18,52 @@ from ci_bootstrap import ensure_tools_dir
 
 ensure_tools_dir(__file__)
 
-from common.gh_actions import write_github_output  # noqa: E402
+from common.gh_actions import gh_error, write_github_output
 
-VALID_DOCKERFILES = {"Dockerfile-build-ubuntu", "Dockerfile-build-android"}
+VALID_TARGETS = {"linux", "linux-cross", "android"}
 VALID_BUILD_TYPES = {"Release", "Debug"}
 
 
 def cmd_validate(args: argparse.Namespace) -> None:
     ok = True
-    if args.dockerfile not in VALID_DOCKERFILES:
-        print(f"::error::Invalid dockerfile '{args.dockerfile}'", file=sys.stderr)
-        print(f"Allowed values: {', '.join(sorted(VALID_DOCKERFILES))}", file=sys.stderr)
+    if args.target not in VALID_TARGETS:
+        gh_error(f"Invalid target '{args.target}'")
+        print(f"Allowed values: {', '.join(sorted(VALID_TARGETS))}", file=sys.stderr)
         ok = False
     if args.build_type not in VALID_BUILD_TYPES:
-        print(f"::error::Invalid build-type '{args.build_type}'", file=sys.stderr)
+        gh_error(f"Invalid build-type '{args.build_type}'")
         print(f"Allowed values: {', '.join(sorted(VALID_BUILD_TYPES))}", file=sys.stderr)
         ok = False
     if not ok:
         sys.exit(1)
-    print(f"Using dockerfile: {args.dockerfile}")
+    print(f"Using target: {args.target}")
     print(f"Build type: {args.build_type}")
 
 
+def resolve_push_target(event_name: str, repo: str, ref: str) -> str:
+    """Registry to push the builder image to, or '' for no push.
+
+    Pushes happen only from the upstream repo on a push event: GHCR for
+    master/Stable branches, Docker Hub (dronecode/qgroundcontrol) for v* release
+    tags. Forks, PRs, and any other repo always resolve to '' (no push).
+    """
+    if event_name != "push" or repo != "mavlink/qgroundcontrol":
+        return ""
+    if ref == "refs/heads/master" or ref.startswith("refs/heads/Stable"):
+        return "ghcr.io/mavlink/qgroundcontrol"
+    if ref.startswith("refs/tags/v"):
+        return "dronecode/qgroundcontrol"
+    return ""
+
+
 def cmd_resolve_push_target(args: argparse.Namespace) -> None:
-    target = ""
-    if args.event_name == "push" and args.repo == "mavlink/qgroundcontrol":
-        ref = args.ref
-        if ref == "refs/heads/master" or ref.startswith("refs/heads/Stable"):
-            target = "ghcr.io/mavlink/qgroundcontrol"
-        elif ref.startswith("refs/tags/v"):
-            target = "dronecode/qgroundcontrol"
+    target = resolve_push_target(args.event_name, args.repo, args.ref)
     write_github_output({"ref": target})
     print(f"push target: {target or '(none)'}")
 
 
 def cmd_run(args: argparse.Namespace) -> None:
-    cmd = ["./deploy/docker/docker-run.sh"]
+    cmd = ["./deploy/docker/_docker-exec.sh"]
     if args.fuse:
         cmd.append("--fuse")
     cmd += [args.image, args.build_type]
@@ -63,9 +73,11 @@ def cmd_run(args: argparse.Namespace) -> None:
         if result.returncode == 0:
             return
         if attempt >= args.max_attempts:
-            print(f"::error::Docker build failed after {attempt} attempt(s).", file=sys.stderr)
+            gh_error(f"Docker build failed after {attempt} attempt(s).")
             sys.exit(1)
-        print(f"Docker build failed on attempt {attempt}. Retrying in {args.retry_delay} seconds...")
+        print(
+            f"Docker build failed on attempt {attempt}. Retrying in {args.retry_delay} seconds..."
+        )
         time.sleep(args.retry_delay)
 
 
@@ -74,7 +86,7 @@ def main() -> None:
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_val = sub.add_parser("validate")
-    p_val.add_argument("--dockerfile", required=True)
+    p_val.add_argument("--target", required=True)
     p_val.add_argument("--build-type", required=True)
 
     p_run = sub.add_parser("run")

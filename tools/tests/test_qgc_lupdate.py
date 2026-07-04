@@ -3,21 +3,14 @@
 
 from __future__ import annotations
 
-import importlib.util
-import sys
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
-_TOOLS_DIR = Path(__file__).resolve().parents[1]
-_MODULE_PATH = _TOOLS_DIR / "translations" / "qgc_lupdate.py"
+from ._helpers import load_script_module
 
-_spec = importlib.util.spec_from_file_location("qgc_lupdate", _MODULE_PATH)
-assert _spec and _spec.loader
-qgc_lupdate = importlib.util.module_from_spec(_spec)
-sys.modules["qgc_lupdate"] = qgc_lupdate
-_spec.loader.exec_module(qgc_lupdate)
+qgc_lupdate = load_script_module("translations/qgc_lupdate.py", "qgc_lupdate")
 
 
 def test_collect_lupdate_errors_clean_output() -> None:
@@ -59,14 +52,18 @@ def test_resolve_lupdate_prefers_qt_root_dir(tmp_path: Path) -> None:
 
 def test_resolve_lupdate_falls_back_to_path(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("QT_ROOT_DIR", raising=False)
-    with patch.object(qgc_lupdate, "get_build_config_value", return_value=""), \
-         patch.object(qgc_lupdate.shutil, "which", return_value="/usr/bin/lupdate"):
+    with (
+        patch.object(qgc_lupdate, "get_build_config_value", return_value=""),
+        patch.object(qgc_lupdate.shutil, "which", return_value="/usr/bin/lupdate"),
+    ):
         assert qgc_lupdate.resolve_lupdate() == Path("/usr/bin/lupdate")
 
 
 def test_resolve_lupdate_raises_when_not_found(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("QT_ROOT_DIR", raising=False)
-    with patch.object(qgc_lupdate, "get_build_config_value", return_value=""), \
-         patch.object(qgc_lupdate.shutil, "which", return_value=None):
-        with pytest.raises(FileNotFoundError):
-            qgc_lupdate.resolve_lupdate()
+    with (
+        patch.object(qgc_lupdate, "get_build_config_value", return_value=""),
+        patch.object(qgc_lupdate.shutil, "which", return_value=None),
+        pytest.raises(FileNotFoundError),
+    ):
+        qgc_lupdate.resolve_lupdate()

@@ -40,11 +40,11 @@ ensure_tools_dir(__file__)
 from common.gh_actions import (
     append_github_env,
     append_github_path,
+    write_github_output,
     write_step_summary,
 )
-from common.gh_actions import (
-    write_github_output as write_github_outputs,
-)
+from common.io import require_tar_data_filter
+from common.markdown import md_table
 from common.net import download_with_retry
 from common.proc import run_captured
 from common.tool_version import probe_version
@@ -58,6 +58,7 @@ def _extract_zip(archive: Path, dest: Path) -> None:
 
 
 def _extract_tar_gz(archive: Path, dest: Path) -> None:
+    require_tar_data_filter()
     with tarfile.open(archive, "r:gz") as tar:
         tar.extractall(dest, filter="data")
 
@@ -130,7 +131,7 @@ class CcacheConfig(NamedTuple):
 class CcacheInstaller:
     """Handles ccache installation with signature verification."""
 
-    DEFAULT_VERSION = "4.13.6"
+    DEFAULT_VERSION = PINNED_BINARY_VERSION
     DEFAULT_MAX_SIZE = "2G"
     MINISIGN_VERSION = "0.11"
     MINISIGN_KEY = "RWQX7yXbBedVfI4PNx6FLdFXu9GHUFsr28s4BVGxm4BeybtnX3P06saF"
@@ -261,6 +262,7 @@ class CcacheInstaller:
             return None
 
         try:
+            require_tar_data_filter()
             with tarfile.open(minisign_path, "r:gz") as tar:
                 tar.extractall(temp_dir, filter="data")
         except tarfile.TarError as e:
@@ -304,6 +306,7 @@ class CcacheInstaller:
         extract_dir = temp_dir / f"ccache-{self.version}-linux-{self.arch}-glibc"
 
         try:
+            require_tar_data_filter()
             with tarfile.open(archive, "r:xz") as tar:
                 tar.extractall(temp_dir, filter="data")
         except tarfile.TarError as e:
@@ -434,21 +437,17 @@ def build_summary_markdown(stats: dict) -> str:
         )
     )
 
-    lines = [
-        "### CCache Statistics",
-        "",
-        "| Metric | Value |",
-        "|--------|-------|",
-        f"| Cache hits | {hits} / {total} ({pct}%) |",
-        f"| Direct hits | {direct} |",
-        f"| Preprocessed hits | {preprocessed} |",
-        f"| Misses | {misses} |",
-        f"| Cache size | {size_kib / 1024:.0f} MiB / {max_kib / 1048576:.1f} GiB ({size_pct}%) |",
-        f"| Cleanups (LRU evictions) | {cleanups} |",
+    rows = [
+        ["Cache hits", f"{hits} / {total} ({pct}%)"],
+        ["Direct hits", direct],
+        ["Preprocessed hits", preprocessed],
+        ["Misses", misses],
+        ["Cache size", f"{size_kib / 1024:.0f} MiB / {max_kib / 1048576:.1f} GiB ({size_pct}%)"],
+        ["Cleanups (LRU evictions)", cleanups],
     ]
     if errors:
-        lines.append(f"| ⚠ Errors | {errors} |")
-    return "\n".join(lines) + "\n"
+        rows.append(["⚠ Errors", errors])
+    return f"### CCache Statistics\n\n{md_table(['Metric', 'Value'], rows)}\n"
 
 
 def get_ccache_verbose_stats() -> str | None:
@@ -513,7 +512,7 @@ def run_summary() -> int:
 
 def output_github_actions(config: CcacheConfig) -> None:
     """Write outputs for GitHub Actions."""
-    write_github_outputs(
+    write_github_output(
         {
             "version": config.version,
             "arch": config.arch,
@@ -797,20 +796,20 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "scope":
         scope = determine_cache_scope(args.event_name, args.ref_name, args.pr_number)
         print(scope)
-        write_github_outputs({"scope": scope})
+        write_github_output({"scope": scope})
         return 0
 
     if args.command == "windows-config":
         values = resolve_windows_binary_config(args.host, args.target)
         print(f"arch={values['arch']}")
         print(f"sha256={values['sha256']}")
-        write_github_outputs(values)
+        write_github_output(values)
         return 0
 
     if args.command == "install-windows":
         install_dir = install_windows_binary(args.version, args.arch, args.sha256, args.runner_temp)
         print(install_dir)
-        write_github_outputs({"install_dir": str(install_dir)})
+        write_github_output({"install_dir": str(install_dir)})
         return 0
 
     if args.command == "add-windows-path":
@@ -820,7 +819,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "macos-config":
         print(f"sha256={MACOS_BINARY_SHA256}")
-        write_github_outputs({"sha256": MACOS_BINARY_SHA256})
+        write_github_output({"sha256": MACOS_BINARY_SHA256})
         return 0
 
     if args.command == "install-macos":

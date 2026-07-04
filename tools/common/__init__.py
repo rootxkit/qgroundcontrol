@@ -80,6 +80,15 @@ if TYPE_CHECKING:
         gh as gh,
     )
     from .gh_actions import (
+        gh_error as gh_error,
+    )
+    from .gh_actions import (
+        gh_notice as gh_notice,
+    )
+    from .gh_actions import (
+        gh_warning as gh_warning,
+    )
+    from .gh_actions import (
         list_run_artifacts as list_run_artifacts,
     )
     from .gh_actions import (
@@ -105,9 +114,6 @@ if TYPE_CHECKING:
     )
     from .logging import (
         Color as Color,
-    )
-    from .logging import (
-        Colors as Colors,
     )
     from .logging import (
         Logger as Logger,
@@ -184,6 +190,9 @@ _LAZY_SYMBOLS: dict[str, str] = {
     "find_json_files": "file_traversal",
     "DEFAULT_SKIP_DIRS": "file_traversal",
     "gh": "gh_actions",
+    "gh_error": "gh_actions",
+    "gh_warning": "gh_actions",
+    "gh_notice": "gh_actions",
     "list_workflow_runs_for_sha": "gh_actions",
     "list_run_artifacts": "gh_actions",
     "write_github_output": "gh_actions",
@@ -199,7 +208,6 @@ _LAZY_SYMBOLS: dict[str, str] = {
     "select_latest_runs_by_name": "github_runs",
     "group_runs_by_name": "github_runs",
     "Color": "logging",
-    "Colors": "logging",
     "Logger": "logging",
     "use_color": "logging",
     "colorize": "logging",
@@ -242,6 +250,7 @@ _LAZY_SYMBOLS: dict[str, str] = {
     "open_in_default_app": "opener",
     "format_bytes": "format",
     "format_delta_bytes": "format",
+    "md_table": "markdown",
 }
 
 __all__ = [*_LAZY_SYMBOLS.keys(), "pip_install"]
@@ -258,13 +267,25 @@ def __getattr__(name: str):
 
 
 def pip_install(packages: list[str], quiet: bool = True) -> None:
-    """Install packages using uv (preferred) or pip."""
+    """Install packages using uv (preferred) or pip.
+
+    Targets the project .venv (on PATH in CI) rather than --system: the system
+    interpreter may be externally managed (PEP 668) when no writable runner
+    Python is provisioned. Falls back to --system when no .venv exists.
+    """
     import shutil
     import subprocess
     import sys
 
     if shutil.which("uv"):
-        cmd = ["uv", "pip", "install", "--system", *packages]
+        from .file_traversal import find_repo_root
+
+        rel = "Scripts/python.exe" if sys.platform == "win32" else "bin/python"
+        venv_python = find_repo_root() / ".venv" / rel
+        if venv_python.exists():
+            cmd = ["uv", "pip", "install", "--python", str(venv_python), *packages]
+        else:
+            cmd = ["uv", "pip", "install", "--system", *packages]
     else:
         cmd = [sys.executable, "-m", "pip", "install", *packages]
         if quiet:

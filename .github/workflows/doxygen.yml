@@ -30,7 +30,9 @@ jobs:
           egress-policy: audit
 
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Install Doxygen and Graphviz
         run: |
@@ -60,7 +62,7 @@ jobs:
           egress-policy: audit
 
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           sparse-checkout: |
             .github/actions/deploy-docs
@@ -68,9 +70,11 @@ jobs:
             .github/scripts/deploy_docs.py
             tools/_bootstrap.py
             tools/common/__init__.py
+            tools/common/file_traversal.py
             tools/common/git.py
             tools/common/proc.py
           sparse-checkout-cone-mode: false
+          persist-credentials: false
 
       - name: Deploy docs
         uses: ./.github/actions/deploy-docs

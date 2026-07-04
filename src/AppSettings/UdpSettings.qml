@@ -26,18 +26,18 @@ ColumnLayout {
         QGCLabel { text: qsTr("Port") }
         QGCTextField {
             id:                     portField
-            text:                   subEditConfig.localPort.toString()
+            text:                   subEditConfig ? subEditConfig.localPort.toString() : ""
             focus:                  true
             Layout.preferredWidth:  _secondColumnWidth
             inputMethodHints:       Qt.ImhFormattedNumbersOnly
-            onTextChanged:          subEditConfig.localPort = parseInt(portField.text)
+            onTextChanged:          { if (subEditConfig) subEditConfig.localPort = parseInt(portField.text) }
         }
     }
 
     QGCLabel { text: qsTr("Server Addresses (optional)") }
 
     Repeater {
-        model: subEditConfig.hostList
+        model: subEditConfig ? subEditConfig.hostList : []
 
         delegate: RowLayout {
             spacing: _colSpacing
@@ -60,7 +60,7 @@ ColumnLayout {
         QGCTextField {
             id:                     hostField
             Layout.preferredWidth:  _secondColumnWidth
-            placeholderText:        qsTr("Example: 127.0.0.1:14550")
+            placeholderText:        qsTr("IP or hostname, e.g. 127.0.0.1:14550 or my-drone.local:14550")
         }
         QGCButton {
             text:       qsTr("Add Server")
